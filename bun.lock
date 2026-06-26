@@ -3,9 +3,10 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "peer-review-mcp",
+      "name": "peer-cli-mcp",
       "dependencies": {
         "@modelcontextprotocol/sdk": "^1.29.0",
+        "ajv": "^8.20.0",
         "zod": "^4.4.3",
       },
       "devDependencies": {

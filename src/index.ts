@@ -2,24 +2,24 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 
-import { reviewWith } from "./reviewer.js";
-import { ReviewRequestSchema } from "./schema.js";
+import { callClaude, callCodex } from "./bridge.js";
+import { CallClaudeRequestSchema, CallCodexRequestSchema } from "./schema.js";
 
 const server = new McpServer({
-  name: "peer-review-mcp",
+  name: "peer-cli-mcp",
   version: "0.1.0"
 });
 
 server.registerTool(
-  "review_with_claude",
+  "call_claude",
   {
-    title: "Review current diff with Claude Code",
-    description: "Ask Claude Code for read-only review of a git diff. Returns normalized findings.",
-    inputSchema: ReviewRequestSchema.shape
+    title: "Call Claude Code",
+    description: "Run Claude Code non-interactively with a caller-authored prompt.",
+    inputSchema: CallClaudeRequestSchema.shape
   },
   async (input) => {
-    const request = ReviewRequestSchema.parse(input);
-    const result = await reviewWith("claude", request);
+    const request = CallClaudeRequestSchema.parse(input);
+    const result = await callClaude(request);
     return {
       content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
       structuredContent: result
@@ -28,15 +28,15 @@ server.registerTool(
 );
 
 server.registerTool(
-  "review_with_codex",
+  "call_codex",
   {
-    title: "Review current diff with Codex",
-    description: "Ask Codex for read-only review of a git diff. Returns normalized findings.",
-    inputSchema: ReviewRequestSchema.shape
+    title: "Call Codex",
+    description: "Run Codex non-interactively with a caller-authored prompt.",
+    inputSchema: CallCodexRequestSchema.shape
   },
   async (input) => {
-    const request = ReviewRequestSchema.parse(input);
-    const result = await reviewWith("codex", request);
+    const request = CallCodexRequestSchema.parse(input);
+    const result = await callCodex(request);
     return {
       content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
       structuredContent: result

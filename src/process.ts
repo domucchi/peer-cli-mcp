@@ -17,6 +17,7 @@ export type ProcessOptions = {
   timeoutMs?: number;
   allowExitCodes?: number[];
   env?: NodeJS.ProcessEnv;
+  rejectOnFailure?: boolean;
 };
 
 export type ProcessRunner = (command: string, args: string[], options: ProcessOptions) => Promise<ProcessResult>;
@@ -24,6 +25,7 @@ export type ProcessRunner = (command: string, args: string[], options: ProcessOp
 export async function runProcess(command: string, args: string[], options: ProcessOptions): Promise<ProcessResult> {
   const timeoutMs = options.timeoutMs ?? 60_000;
   const allowExitCodes = new Set(options.allowExitCodes ?? [0]);
+  const rejectOnFailure = options.rejectOnFailure ?? true;
 
   return await new Promise<ProcessResult>((resolve, reject) => {
     const child = spawn(command, args, {
@@ -68,7 +70,7 @@ export async function runProcess(command: string, args: string[], options: Proce
         stderr,
         timedOut
       };
-      if (timedOut || exitCode === null || !allowExitCodes.has(exitCode)) {
+      if (rejectOnFailure && (timedOut || exitCode === null || !allowExitCodes.has(exitCode))) {
         reject(new ProcessError(result));
         return;
       }

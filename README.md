@@ -1,21 +1,21 @@
-# peer-review-mcp
+# peer-cli-mcp
 
-Read-only MCP broker for cross-agent code review.
+MCP bridge for calling local coding-agent CLIs from another agent.
 
-MIT licensed. Built for trusted local workflows where one coding agent asks another coding agent to review a diff without giving the reviewer write access.
+MIT licensed. Built for trusted local workflows where one agent asks a peer agent to do a bounded task: review, verification, architecture critique, bug hunt, summarization, or another caller-authored job.
 
 It exposes two tools:
 
-- `review_with_claude`
-- `review_with_codex`
+- `call_codex`
+- `call_claude`
 
-Each tool collects the current git diff, optional caller-supplied context, asks the peer agent for review, and returns normalized findings.
+The bridge does not collect diffs, build prompts, define review schemas, or interpret outcomes. The caller owns prompt, context, task semantics, and result handling.
 
 ## Install
 
 ```bash
-git clone https://github.com/domucchi/peer-review-mcp.git
-cd peer-review-mcp
+git clone https://github.com/domucchi/peer-cli-mcp.git
+cd peer-cli-mcp
 bun install
 bun run build
 ```
@@ -25,9 +25,9 @@ bun run build
 Add to `~/.codex/config.toml`:
 
 ```toml
-[mcp_servers.peer_review]
+[mcp_servers.peer_cli]
 command = "bun"
-args = ["/Users/domucchi/Code/personal/peer-review-mcp/src/index.ts"]
+args = ["/Users/domucchi/Code/personal/peer-cli-mcp/src/index.ts"]
 enabled = true
 default_tools_approval_mode = "prompt"
 tool_timeout_sec = 900
@@ -36,7 +36,7 @@ tool_timeout_sec = 900
 Then ask Codex:
 
 ```text
-Review my current diff with Claude. Use peer_review.review_with_claude. Address valid high/medium findings only.
+Use peer_cli.call_claude to review the current diff. I will provide the diff in the prompt.
 ```
 
 ## Claude Code config
@@ -45,9 +45,9 @@ Add to `.mcp.json` or Claude MCP settings:
 
 ```json
 {
-  "peer-review": {
+  "peer-cli": {
     "command": "bun",
-    "args": ["/Users/domucchi/Code/personal/peer-review-mcp/src/index.ts"]
+    "args": ["/Users/domucchi/Code/personal/peer-cli-mcp/src/index.ts"]
   }
 }
 ```
@@ -55,57 +55,128 @@ Add to `.mcp.json` or Claude MCP settings:
 Then ask Claude:
 
 ```text
-Review my current diff with Codex via review_with_codex. Do not let Codex edit files.
+Use call_codex to review this diff. Keep Codex sandbox read-only.
 ```
 
-## Tool input
+## call_codex
+
+Input:
 
 ```json
 {
-  "cwd": "/path/to/repo",
-  "base_ref": "main",
-  "target_ref": "HEAD",
-  "files": ["src/file.ts"],
-  "context_files": ["docs/review-contract.md"],
-  "focus": "correctness and missing tests",
+  "cwd": "/path/to/worktree",
+  "prompt": "caller-authored prompt",
   "timeout_seconds": 600,
-  "max_diff_bytes": 300000,
-  "model": "optional model override"
+  "model": "optional model override",
+  "sandbox": "read-only",
+  "skip_git_repo_check": false,
+  "output_schema": {
+    "type": "object",
+    "properties": {
+      "summary": { "type": "string" }
+    },
+    "required": ["summary"]
+  }
 }
 ```
 
 Defaults:
 
 - `cwd`: `.`
-- `base_ref`: `HEAD`
-- `target_ref`: omitted means current worktree diff from `base_ref`
 - `timeout_seconds`: `600`
-- `max_diff_bytes`: `300000`
+- `sandbox`: `read-only`
+- `skip_git_repo_check`: `false`
+- `output_schema`: omitted
 
-`base_ref` and `target_ref` use `git diff base_ref...target_ref` semantics. For branch-vs-main review, use `"base_ref": "main", "target_ref": "HEAD"`.
+Codex is launched with `codex exec --ephemeral --ignore-user-config --ignore-rules`.
 
-When `target_ref` is omitted, the broker reviews `git diff base_ref` plus untracked files.
+## call_claude
 
-`context_files` are resolved from the repository root unless absolute paths are supplied. Absolute paths are intentionally supported for trusted local agent workflows.
+Input:
 
-## Workflow fit
+```json
+{
+  "cwd": "/path/to/worktree",
+  "prompt": "caller-authored prompt",
+  "timeout_seconds": 600,
+  "model": "optional model override",
+  "tool_mode": "none",
+  "output_schema": {
+    "type": "object",
+    "properties": {
+      "summary": { "type": "string" }
+    },
+    "required": ["summary"]
+  }
+}
+```
 
-The broker is workflow-agnostic. Pass review contracts, task artifacts, or planning notes through `context_files` or `extra_context`.
+Defaults:
 
-Reviewers are constrained to:
+- `cwd`: `.`
+- `timeout_seconds`: `600`
+- `tool_mode`: `none`
+- `output_schema`: omitted
 
-- read-only review
-- supplied diff/context only
-- no peer-review recursion
-- JSON-only findings
+`tool_mode: "none"` launches Claude Code with no tools. `tool_mode: "read-only"` allows `Read`, `Grep`, and `Glob`.
 
-## Safety boundary
+Claude Code is launched with `claude -p --no-session-persistence --permission-mode dontAsk --safe-mode`.
 
-This is a trusted local broker. Do not expose it to untrusted callers or network clients.
+## Output
 
-The broker can read any supplied `context_files`, including absolute paths. Treat tool arguments as trusted-agent input.
+Both tools return:
 
-Reviewer prompts instruct both agents not to edit. Codex is also launched with `--sandbox read-only`; Claude Code is launched with no tools, safe mode, and non-interactive output, which is a tool-level restriction rather than an OS sandbox.
+```json
+{
+  "agent": "codex",
+  "stdout": "...",
+  "stderr": "...",
+  "exit_code": 0,
+  "signal": null,
+  "timed_out": false,
+  "parsed_output": null,
+  "validation_errors": []
+}
+```
+
+When `output_schema` is provided, the bridge tries to parse JSON from stdout, validates it with Ajv, and returns the matching value in `parsed_output`. If validation fails, `parsed_output` is `null` and `validation_errors` explains why.
+
+## Review Example
+
+The caller should gather context and write the review prompt.
+
+```text
+Review this diff for correctness, regressions, security issues, and missing tests.
+Do not suggest style-only changes.
+Return JSON matching:
+{
+  "summary": "string",
+  "findings": [
+    {
+      "severity": "critical|high|medium|low|nit",
+      "file": "string",
+      "line": 123,
+      "title": "string",
+      "rationale": "string",
+      "suggested_fix": "string",
+      "confidence": "high|medium|low"
+    }
+  ]
+}
+
+Diff:
+...
+```
+
+Then pass that prompt to `call_claude` or `call_codex` with an `output_schema` if structured output is required.
+
+## Safety Boundary
+
+This is a trusted local bridge. Do not expose it to untrusted callers or network clients.
+
+The bridge runs local CLIs in the supplied `cwd` and passes caller-authored prompts through stdin. It does not sanitize prompts or decide whether a task is safe.
+
+Codex defaults to `read-only` sandbox. Claude defaults to no tools; `tool_mode: "read-only"` is a Claude Code tool restriction, not an OS sandbox.
 
 ## Development
 

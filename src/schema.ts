@@ -1,103 +1,44 @@
 import { z } from "zod";
 
-export const SeveritySchema = z.enum(["critical", "high", "medium", "low", "nit"]);
-export const ConfidenceSchema = z.enum(["high", "medium", "low"]);
+export const JsonValueSchema: z.ZodType<JsonValue> = z.lazy(() => z.union([
+  z.string(),
+  z.number(),
+  z.boolean(),
+  z.null(),
+  z.array(JsonValueSchema),
+  z.record(z.string(), JsonValueSchema)
+]));
 
-export const FindingSchema = z.object({
-  severity: SeveritySchema,
-  file: z.string(),
-  line: z.number().int().positive().nullable(),
-  title: z.string(),
-  rationale: z.string(),
-  suggested_fix: z.string(),
-  confidence: ConfidenceSchema
-});
+export type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
+export type JsonObject = { [key: string]: JsonValue };
+export type OutputSchema = boolean | JsonObject;
 
-export const AgentReviewSchema = z.object({
-  summary: z.string(),
-  findings: z.array(FindingSchema)
-});
+export const OutputSchemaSchema: z.ZodType<OutputSchema> = z.union([
+  z.boolean(),
+  z.record(z.string(), JsonValueSchema)
+]);
 
-export type AgentReview = z.infer<typeof AgentReviewSchema>;
-
-export const ReviewRequestSchema = z.object({
+const BaseCallRequestSchema = z.object({
   cwd: z.string().default("."),
-  base_ref: z.string().optional(),
-  target_ref: z.string().optional(),
-  files: z.array(z.string()).optional(),
-  context_files: z.array(z.string()).optional(),
-  focus: z.string().optional(),
-  extra_context: z.string().optional(),
+  prompt: z.string().min(1),
   timeout_seconds: z.number().int().positive().max(1800).default(600),
-  max_diff_bytes: z.number().int().positive().max(2_000_000).default(300_000),
-  model: z.string().optional()
+  model: z.string().optional(),
+  output_schema: OutputSchemaSchema.optional()
 });
 
-export type ReviewRequest = z.infer<typeof ReviewRequestSchema>;
+export const CodexSandboxSchema = z.enum(["read-only", "workspace-write", "danger-full-access"]);
 
-export type ReviewerName = "claude" | "codex";
+export const CallCodexRequestSchema = BaseCallRequestSchema.extend({
+  sandbox: CodexSandboxSchema.default("read-only"),
+  skip_git_repo_check: z.boolean().default(false)
+});
 
-export const agentReviewJsonSchema = {
-  type: "object",
-  additionalProperties: false,
-  required: ["summary", "findings"],
-  properties: {
-    summary: {
-      type: "string",
-      description: "Concise review summary."
-    },
-    findings: {
-      type: "array",
-      description: "Actionable review findings only.",
-      items: {
-        type: "object",
-        additionalProperties: false,
-        required: ["severity", "file", "line", "title", "rationale", "suggested_fix", "confidence"],
-        properties: {
-          severity: {
-            type: "string",
-            enum: ["critical", "high", "medium", "low", "nit"]
-          },
-          file: {
-            type: "string",
-            description: "Repo-relative file path."
-          },
-          line: {
-            type: ["integer", "null"],
-            minimum: 1,
-            description: "New-side line number, or null when not knowable."
-          },
-          title: {
-            type: "string"
-          },
-          rationale: {
-            type: "string"
-          },
-          suggested_fix: {
-            type: "string"
-          },
-          confidence: {
-            type: "string",
-            enum: ["high", "medium", "low"]
-          }
-        }
-      }
-    }
-  }
-} as const;
+export const ClaudeToolModeSchema = z.enum(["none", "read-only"]);
 
-export function normalizeAgentReview(value: unknown): AgentReview {
-  const parsed = AgentReviewSchema.parse(value);
-  return {
-    summary: parsed.summary.trim(),
-    findings: parsed.findings.map((finding) => ({
-      severity: finding.severity,
-      file: finding.file.trim(),
-      line: finding.line,
-      title: finding.title.trim(),
-      rationale: finding.rationale.trim(),
-      suggested_fix: finding.suggested_fix.trim(),
-      confidence: finding.confidence
-    }))
-  };
-}
+export const CallClaudeRequestSchema = BaseCallRequestSchema.extend({
+  tool_mode: ClaudeToolModeSchema.default("none")
+});
+
+export type CallCodexRequest = z.infer<typeof CallCodexRequestSchema>;
+export type CallClaudeRequest = z.infer<typeof CallClaudeRequestSchema>;
+export type AgentName = "codex" | "claude";
