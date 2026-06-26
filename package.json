@@ -4,7 +4,7 @@
   "description": "MCP broker for read-only peer review between Codex and Claude Code.",
   "type": "module",
   "license": "MIT",
-  "author": "Dominik Mucchielli <domu@domucchi.dev>",
+  "author": "domucchi",
   "homepage": "https://github.com/domucchi/peer-review-mcp#readme",
   "repository": {
     "type": "git",
