@@ -2,6 +2,8 @@
 
 Read-only MCP broker for cross-agent code review.
 
+MIT licensed. Built for trusted local workflows where one coding agent asks another coding agent to review a diff without giving the reviewer write access.
+
 It exposes two tools:
 
 - `review_with_claude`
@@ -12,6 +14,8 @@ Each tool collects the current git diff, optional caller-supplied context, asks 
 ## Install
 
 ```bash
+git clone https://github.com/domucchi/peer-review-mcp.git
+cd peer-review-mcp
 bun install
 bun run build
 ```
@@ -110,3 +114,7 @@ bun run check
 bun test
 bun run build
 ```
+
+## License
+
+MIT

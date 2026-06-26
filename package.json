@@ -3,6 +3,25 @@
   "version": "0.1.0",
   "description": "MCP broker for read-only peer review between Codex and Claude Code.",
   "type": "module",
+  "license": "MIT",
+  "author": "Dominik Mucchielli <domu@domucchi.dev>",
+  "homepage": "https://github.com/domucchi/peer-review-mcp#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/domucchi/peer-review-mcp.git"
+  },
+  "bugs": {
+    "url": "https://github.com/domucchi/peer-review-mcp/issues"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "codex",
+    "claude-code",
+    "code-review",
+    "peer-review"
+  ],
+  "packageManager": "bun@1.3.13",
   "bin": {
     "peer-review-mcp": "./dist/index.js"
   },
